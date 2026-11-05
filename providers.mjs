@@ -44,7 +44,7 @@ export function createProviders(c,brand,fetcher=fetch){
    const p=await paypal('/v1/billing/subscriptions','POST',{plan_id:plan.id,custom_id:o.reference,...(address?{subscriber:{shipping_address:address}}:{}),application_context:context},idempotency(o));return {id:paypalId(p.id,true),url:providerUrl(p.links?.find(x=>x.rel==='approve')?.href,'paypal',c.mode)};
   },
   async status(o,capture=false){
-   if(['stripe','affirm'].includes(o.provider)){const s=await stripe('checkout/sessions/'+stripeId(o.checkout.id)+'?expand[]=line_items&expand[]=subscription');return {status:validateStripe(s,o,c.mode),subscription:typeof s.subscription==='object'?s.subscription.id:null};}
+   if(['stripe','affirm'].includes(o.provider)){const s=await stripe('checkout/sessions/'+stripeId(o.checkout.id)+'?expand[]=line_items&expand[]=subscription');return {status:validateStripe(s,o,c.mode),subscription:s.subscription&&typeof s.subscription==='object'?s.subscription.id:null};}
    const id=paypalId(o.checkout.id,!!o.monthly);
    if(!o.monthly){let p=await paypal('/v2/checkout/orders/'+id);validatePayPalOrder(p,o);if(capture&&p.status==='APPROVED'){try{await paypal('/v2/checkout/orders/'+id+'/capture','POST',{},idempotency(o)+'-capture');}catch(e){if(e.providerStatus!==422)throw e;}p=await paypal('/v2/checkout/orders/'+id);}return {status:validatePayPalOrder(p,o)};}
    const p=await paypal('/v1/billing/subscriptions/'+id);if(p.custom_id!==o.reference||p.plan_overridden||p.quantity&&p.quantity!=='1'||Number(p.shipping_amount?.value||0)!==0||!/^P-[A-Z0-9]{20,30}$/.test(p.plan_id||''))throw mismatch();
