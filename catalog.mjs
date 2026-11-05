@@ -5,6 +5,7 @@ export const money = n => new Intl.NumberFormat('en-US', {style:'currency',curre
 export const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0,12);
 const integer = (n,min=0,max=99999999) => Number.isSafeInteger(n)&&n>=min&&n<=max;
 export const isVerificationItem = p => p?.testOnly===true&&p.kind==='digital'&&p.monthly===0&&!p.credits&&!p.planId&&((p.id==='checkout-test-free'&&p.once===0&&JSON.stringify(p.allowedProviders)===JSON.stringify(['stripe']))||(p.id==='checkout-test-paypal'&&p.once===10&&JSON.stringify(p.allowedProviders)===JSON.stringify(['paypal'])));
+export const purchasePolicies=(c,q)=>q.testOnly?{purchase:'One-time checkout verification order for '+money(q.amount)+' USD. No equipment, software access, credits, subscription, delivery or recurring billing is included.'}:c.policies;
 export function validateCatalog(c) {
   if (!c || !/^[a-z][a-z0-9-]{2,30}$/.test(c.id) || !c.name || c.currency!=='USD' || !Array.isArray(c.items) || !c.items.length || new Set(c.items.map(x=>x.id)).size!==c.items.length) throw new Error('Invalid catalog');
   for(const p of c.items) if(!/^[a-z0-9][a-z0-9-]{0,79}$/.test(p.id)||!p.name||p.name.length>160||![p.once,p.monthly].every(x=>integer(x))||(p.once+p.monthly<1&&!isVerificationItem(p))||(p.testOnly!==undefined&&!isVerificationItem(p))||!['physical','digital'].includes(p.kind)) throw new Error('Invalid catalog item');

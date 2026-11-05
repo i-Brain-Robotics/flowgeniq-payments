@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises';
-import {configuration,quote,digest} from './catalog.mjs';
+import {configuration,quote,digest,purchasePolicies} from './catalog.mjs';
 import {createProviders} from './providers.mjs';
 import {createStore} from './store.mjs';
 import {CheckoutError,nonce,signCookie,readCookie,makeReference,readReference,equal,stripeSignature} from './security.mjs';
@@ -37,19 +37,20 @@ export function createApp(env,catalog,options={}){
   if(req.method==='GET'&&path==='/checkout'){
    available(url.searchParams.get('sku')||catalog.items[0].id);rate(req);if([...url.searchParams.keys()].some(k=>!['sku','quantity','country','region','installation'].includes(k))||[...url.searchParams.keys()].some(k=>url.searchParams.getAll(k).length!==1)||url.searchParams.has('installation')&&!['true','false'].includes(url.searchParams.get('installation')))throw new CheckoutError(400,'Invalid configuration.');
    const input={sku:url.searchParams.get('sku')||catalog.items[0].id,quantity:Number(url.searchParams.get('quantity')||1),country:url.searchParams.get('country')||'US',region:url.searchParams.get('region')??'',installation:url.searchParams.get('installation')==='true'};if(catalog.items.find(p=>p.id===input.sku)?.kind==='physical'&&input.country==='US'&&!input.region){send(res,200,configure(catalog,cfg,input),true);return;}const q=quote(catalog,input);
+   const termsHash=digest(purchasePolicies(catalog,q));
    const value=req.headers.cookie?.split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1),old=readCookie(value,cfg.signingSecret);
-   const ticket=old&&digest(old.input)===digest(input)&&old.catalogHash===q.catalogHash&&old.expires>Date.now()/1000+1900?old:{nonce:nonce(),input,catalogHash:q.catalogHash,expires:Math.floor(Date.now()/1000)+7200};
+   const ticket=old&&old.termsHash===termsHash&&digest(old.input)===digest(input)&&old.catalogHash===q.catalogHash&&old.expires>Date.now()/1000+1900?old:{nonce:nonce(),input,catalogHash:q.catalogHash,termsHash,expires:Math.floor(Date.now()/1000)+7200};
    send(res,200,review(catalog,cfg,q,ticket),true,{'Set-Cookie':`${cookieName}=${signCookie(ticket,cfg.signingSecret)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=7200${cfg.baseUrl.startsWith('https:')?'; Secure':''}`});return;
   }
   if(req.method==='POST'&&path==='/payments/create'){
    sameOrigin(req);rate(req);if(!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded'))throw new CheckoutError(415,'Use the checkout form.');const form=new URLSearchParams((await body(req)).toString());if([...form.keys()].some(k=>!['csrf','accept','provider','name','line1','line2','city','postal'].includes(k))||[...form.keys()].some(k=>form.getAll(k).length!==1))throw new CheckoutError(400,'Invalid checkout request.');
    const value=req.headers.cookie?.split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1),ticket=readCookie(value,cfg.signingSecret);
    if(!ticket||!equal(ticket.nonce,form.get('csrf')))throw new CheckoutError(403,'Checkout expired. Return to the shop.');
-   const q=quote(catalog,ticket.input);available(q.sku);if(q.catalogHash!==ticket.catalogHash||ticket.expires<Date.now()/1000+1800)throw new CheckoutError(409,'Review the current price and terms.');
+   const q=quote(catalog,ticket.input);available(q.sku);if(q.catalogHash!==ticket.catalogHash||ticket.termsHash!==digest(purchasePolicies(catalog,q))||ticket.expires<Date.now()/1000+1800)throw new CheckoutError(409,'Review the current price and terms.');
    const provider=form.get('provider');if(!cfg.providers.includes(provider)||q.testOnly&&!q.allowedProviders.includes(provider)||form.get('accept')!=='yes')throw new CheckoutError(400,'Select a payment method and accept the purchase terms.');
    if(provider==='affirm'&&(q.kind!=='physical'||q.monthly||q.country!=='US'||q.once<3500||q.once>3000000))throw new CheckoutError(400,'Affirm is not available for this configuration.');
    const address=Object.fromEntries(['name','line1','line2','city','postal'].map(k=>[k,(form.get(k)||'').trim()]));if(!address.name||Object.values(address).some(v=>v.length>140)||q.kind==='physical'&&['line1','city','postal'].some(k=>!address[k]))throw new CheckoutError(400,'Complete the delivery details.');
-   const termsHash=digest(catalog.policies),reference=makeReference({nonce:ticket.nonce,amount:q.amount,currency:q.currency,expires:ticket.expires,termsHash},q.country,cfg.signingSecret);
+   const termsHash=digest(purchasePolicies(catalog,q)),reference=makeReference({nonce:ticket.nonce,amount:q.amount,currency:q.currency,expires:ticket.expires,termsHash},q.country,cfg.signingSecret);
    const order={...q,id:ticket.nonce,reference,provider,address,expires:ticket.expires,termsHash,status:'creating'};await store.put(order);
    const checkout=await store.lock(order.id,async o=>{if(o.reference!==reference||o.provider!==provider||addressDigest(o.address)!==addressDigest(address))throw new CheckoutError(409,'This checkout has already started. Return to the shop for a new configuration.');if(!o.checkout)o.checkout=await providers.create(o);return o.checkout;});
    send(res,303,'',false,{Location:checkout.url});return;
