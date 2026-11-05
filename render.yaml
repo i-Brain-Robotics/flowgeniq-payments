@@ -7,7 +7,7 @@ services:
     buildCommand: npm ci --omit=dev && npm test
     startCommand: npm start
     healthCheckPath: /readyz
-    autoDeployTrigger: "off"
+    autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
         value: "24"
@@ -18,7 +18,7 @@ services:
       - key: PAYPAL_MODE
         value: live
       - key: PAYMENT_VERIFICATION_REVISION
-        value: "2026-11-05-2"
+        value: "2026-11-05-3"
       - key: PAYMENT_VERIFICATION_ENABLED
         value: "true"
       - key: CHECKOUT_SIGNING_SECRET

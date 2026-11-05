@@ -9,6 +9,7 @@ const css=await readFile(new URL('./checkout.css',import.meta.url));
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin','Content-Security-Policy':"default-src 'none'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; form-action 'self' https://checkout.stripe.com https://www.paypal.com https://paypal.com https://www.sandbox.paypal.com https://sandbox.paypal.com; base-uri 'none'; frame-ancestors 'none'"};
 export const send=(res,status,value,html=false,extra={})=>{res.writeHead(status,{...headers,'Content-Type':html?'text/html; charset=utf-8':'application/json; charset=utf-8',...extra});res.end(typeof value==='string'?value:JSON.stringify(value));};
 async function body(req,max=4096){const parts=[];let count=0;for await(const p of req){count+=p.length;if(count>max)throw new CheckoutError(413,'Request too large.');parts.push(p);}return Buffer.concat(parts);}
+const addressDigest=a=>digest(['name','line1','line2','city','postal'].map(k=>a?.[k]||''));
 const json=raw=>{try{const d=JSON.parse(raw);if(!d||typeof d!=='object'||Array.isArray(d))throw 0;return d;}catch{throw new CheckoutError(400,'Invalid request.');}};
 export function createApp(env,catalog,options={}){
  const cfg=configuration(env,catalog),store=options.store||createStore(env),providers=options.providers||createProviders(cfg,catalog,options.fetcher),buckets=new Map();
@@ -50,7 +51,7 @@ export function createApp(env,catalog,options={}){
    const address=Object.fromEntries(['name','line1','line2','city','postal'].map(k=>[k,(form.get(k)||'').trim()]));if(!address.name||Object.values(address).some(v=>v.length>140)||q.kind==='physical'&&['line1','city','postal'].some(k=>!address[k]))throw new CheckoutError(400,'Complete the delivery details.');
    const termsHash=digest(catalog.policies),reference=makeReference({nonce:ticket.nonce,amount:q.amount,currency:q.currency,expires:ticket.expires,termsHash},q.country,cfg.signingSecret);
    const order={...q,id:ticket.nonce,reference,provider,address,expires:ticket.expires,termsHash,status:'creating'};await store.put(order);
-   const checkout=await store.lock(order.id,async o=>{if(o.reference!==reference||o.provider!==provider||digest(o.address)!==digest(address))throw new CheckoutError(409,'This checkout has already started. Return to the shop for a new configuration.');if(!o.checkout)o.checkout=await providers.create(o);return o.checkout;});
+   const checkout=await store.lock(order.id,async o=>{if(o.reference!==reference||o.provider!==provider||addressDigest(o.address)!==addressDigest(address))throw new CheckoutError(409,'This checkout has already started. Return to the shop for a new configuration.');if(!o.checkout)o.checkout=await providers.create(o);return o.checkout;});
    send(res,303,'',false,{Location:checkout.url});return;
   }
   if(req.method==='GET'&&['/payments/stripe/return','/payments/paypal/return'].includes(path)){
