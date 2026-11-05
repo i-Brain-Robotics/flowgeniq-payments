@@ -25,3 +25,18 @@ render.yaml provisions a Starter web service and Basic 256 MB PostgreSQL databas
 ## Verification and limits
 
 Run npm ci && npm test. Use a dedicated development PostgreSQL database for real persistence checks. No credentials are committed. Refunds, fulfillment, subscription management and automatic software/credit provisioning are not implemented. Renewal events do not grant entitlements. Prices are a versioned snapshot, so review future changes in both systems before release. Catalog policies may be incomplete; live readiness is blocked until completed. The deployment does not change the existing storefront or migrate existing customer subscriptions.
+
+
+## Temporary checkout verification products (November 5, 2026)
+
+New verification products use the existing provider checkout, signed-reference, return, and webhook paths. `PAYMENT_VERIFICATION_ENABLED=true` enables only these items while normal sales remain subject to their existing approval and readiness checks. This flag can be set false to remove them after testing.
+
+- `checkout-test-free`: $0.00 USD, one-time Stripe no-cost order. Successful completion is recorded as `free`, not a paid card transaction. Stripe collects no payment method.
+- `checkout-test-paypal`: $0.10 USD, one-time PayPal order and capture. This is a real payment in live mode; no subscription or delivery address is required.
+- Both items include no equipment, software access, credits, subscription, or automatic entitlement.
+- Stripe's minimum non-zero USD card charge is $0.50. No paid Stripe verification is authorized or performed by this change.
+- Unit/HTTP tests cover exact prices, supported providers, consent, signed references, free completion, PayPal capture and webhook reconciliation. They do not prove live authentication, buyer approval, delivery, or a completed live transaction.
+
+The Blueprint no longer manages payment mode, normal shop enablement, catalog/onboarding approval, or enabled-provider lists. Existing Dashboard values are preserved rather than reset during a Blueprint sync. Live keys still require matching `PAYMENT_MODE=live` and `PAYPAL_MODE=live` settings, plus correctly registered webhook destinations. Credentials are never copied into this repository.
+
+The separate payment-services Render account is needed for manual deployment. Frontend verification cards appear only after the matching backend reports live-mode verification readiness. Current original storefront checkout flows and legacy subscriptions remain in place.

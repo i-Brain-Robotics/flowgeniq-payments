@@ -38,3 +38,8 @@ Webhook URLs:
 - https://flowgeniq-payments.onrender.com/payments/webhooks/paypal
 
 See README.md for the full activation and migration workflow. The service being LIVE on Render means its infrastructure is running; it does not mean live payment processing is enabled.
+
+
+## Verification-product change prepared — November 5, 2026
+
+$0 Stripe free-order and $0.10 PayPal products are prepared. Local verification across all five payment repositories passes 212 automated tests (FaceDecode 55; BodyDecode 38; AugmentEYE 38; FlowGenIQ 38; FlowMedIQ 43). These are mocked provider/HTTP tests. This revision still needs deployment, live provider validation, signed webhook delivery and buyer completion. No live verification order or charge has been completed.

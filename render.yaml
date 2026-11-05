@@ -13,14 +13,8 @@ services:
         value: "24"
       - key: NODE_ENV
         value: production
-      - key: PAYMENT_MODE
-        value: test
-      - key: SHOP_ENABLED
-        value: "false"
-      - key: CATALOG_APPROVED
-        value: "false"
-      - key: ENABLED_PROVIDERS
-        value: stripe,paypal
+      - key: PAYMENT_VERIFICATION_ENABLED
+        value: "true"
       - key: CHECKOUT_SIGNING_SECRET
         generateValue: true
       - key: DATABASE_URL

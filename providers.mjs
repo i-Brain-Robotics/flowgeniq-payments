@@ -6,8 +6,9 @@ export function validateStripe(s,o,mode){
   if(s.status==='complete'&&!Array.isArray(s.line_items?.data))throw mismatch();
   if(s.status==='complete'&&o.kind==='physical'&&(s.shipping_details?.address?.country!==o.country||o.country==='US'&&s.shipping_details.address.state?.toUpperCase()!==o.region))throw mismatch();
   const lines=s.line_items?.data;
-  if(lines){const expected=[...(o.once?[{amount:o.once,recurring:false}]:[]),...(o.monthly?[{amount:o.monthly,recurring:true}]:[])];if(s.line_items.has_more||lines.length!==expected.length||expected.some(e=>!lines.some(l=>l.quantity===1&&l.price?.unit_amount===e.amount&&l.price?.currency?.toUpperCase()===o.currency&&!!l.price?.recurring===e.recurring&&(!e.recurring||l.price.recurring.interval==='month'&&l.price.recurring.interval_count===1))))throw mismatch();}
+  if(lines){const expected=[...(o.once||o.testOnly&&o.amount===0?[{amount:o.once,recurring:false}]:[]),...(o.monthly?[{amount:o.monthly,recurring:true}]:[])];if(s.line_items.has_more||lines.length!==expected.length||expected.some(e=>!lines.some(l=>l.quantity===1&&l.price?.unit_amount===e.amount&&l.price?.currency?.toUpperCase()===o.currency&&!!l.price?.recurring===e.recurring&&(!e.recurring||l.price.recurring.interval==='month'&&l.price.recurring.interval_count===1))))throw mismatch();}
   if(o.monthly&&s.status==='complete'){const sub=s.subscription,items=sub?.items?.data,p=items?.[0]?.price;if(!sub||!['active','past_due','canceled','unpaid','paused'].includes(sub.status)||items?.length!==1||sub.items.has_more||items[0].quantity!==1||p?.unit_amount!==o.monthly||p.currency?.toUpperCase()!==o.currency||p.recurring?.interval!=='month'||p.recurring?.interval_count!==1)throw mismatch();}
+  if(o.testOnly&&o.sku==='checkout-test-free'&&o.amount===0&&s.status==='complete'&&s.payment_status==='no_payment_required')return 'free';
   return s.status==='expired'?'expired':s.payment_status==='paid'&&s.status==='complete'?(!o.monthly||s.subscription?.status==='active'?'paid':'review'):s.status==='complete'?'pending':'unpaid';
 }
 export function validatePayPalPlan(p,o){const cycles=p.billing_cycles,c=cycles?.[0],fee=p.payment_preferences?.setup_fee;if(cycles?.length!==1||c.tenure_type!=='REGULAR'||c.total_cycles!==0||c.frequency?.interval_unit!=='MONTH'||c.frequency.interval_count!==1||decimal(c.pricing_scheme?.fixed_price?.value)!==o.monthly||c.pricing_scheme.fixed_price.currency_code!==o.currency||decimal(fee?.value||'0')!==o.once||(fee&&fee.currency_code!==o.currency)||Number(p.taxes?.percentage||0)!==0||p.quantity_supported===true)throw mismatch();}
@@ -22,12 +23,14 @@ export function createProviders(c,brand,fetcher=fetch){
  function paypalId(id,monthly){if(!(monthly?/^I-[A-Z0-9]{8,30}$/:/^[A-Z0-9]{8,40}$/).test(id||''))throw mismatch();return id;}
  return {
   async create(o){
+   if(o.testOnly&&!(o.sku==='checkout-test-free'&&o.provider==='stripe'&&o.amount===0||o.sku==='checkout-test-paypal'&&o.provider==='paypal'&&o.amount===10))throw new CheckoutError(400,'Choose the supported verification payment method.');
+   if(o.provider==='paypal'&&o.amount<=0)throw new CheckoutError(400,'PayPal requires a positive amount.');
    if(['stripe','affirm'].includes(o.provider)){
     const b=new URLSearchParams({mode:o.monthly?'subscription':'payment','payment_method_types[0]':o.provider==='affirm'?'affirm':'card','adaptive_pricing[enabled]':'false',client_reference_id:o.id,'metadata[payment_reference]':o.reference,'metadata[brand]':brand.id,'metadata[sku]':o.sku,'metadata[terms_hash]':o.termsHash,billing_address_collection:'required',success_url:c.baseUrl+'/payments/stripe/return?state='+encodeURIComponent(o.reference)+'&session_id={CHECKOUT_SESSION_ID}',cancel_url:c.baseUrl+'/payments/cancel',expires_at:String(o.expires)});
     if(o.kind==='physical')b.set('shipping_address_collection[allowed_countries][0]',o.country);
     if(o.monthly)b.set('subscription_data[metadata][payment_reference]',o.reference);
     else b.set('payment_intent_data[metadata][payment_reference]',o.reference);
-    const lines=[...(o.once?[[o.once,o.name+' — one-time total',false]]:[]),...(o.monthly?[[o.monthly,o.name+' — monthly',true]]:[])];
+    const lines=[...(o.once||o.testOnly&&o.amount===0?[[o.once,o.name+' — one-time total',false]]:[]),...(o.monthly?[[o.monthly,o.name+' — monthly',true]]:[])];
     lines.forEach(([amount,name,recurring],i)=>{for(const[k,v]of Object.entries({currency:o.currency.toLowerCase(),unit_amount:String(amount),'product_data][name':name}))b.set(`line_items[${i}][price_data][${k}]`,v);b.set(`line_items[${i}][quantity]`,'1');if(recurring)b.set(`line_items[${i}][price_data][recurring][interval]`,'month');});
     const s=await stripe('checkout/sessions','POST',b,idempotency(o));validateStripe(s,o,c.mode);return {id:stripeId(s.id),url:providerUrl(s.url,'stripe',c.mode)};
    }

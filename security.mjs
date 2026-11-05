@@ -29,7 +29,7 @@ export function makeReference(ticket, country, secret) {
     const value = [ticket.provider === 'affirm' ? 'fd3' : 'fd2',ticket.nonce,ticket.hardware.toString(36),ticket.monthly.toString(36),ticket.currency,ticket.expires.toString(36),ticket.termsHash,country,ticket.selection].join('.');
     return `${value}.${hmac(value,secret).slice(0,32)}`;
   }
-  const value = ['fd1', ticket.nonce, ticket.amount, ticket.currency, ticket.expires, ticket.termsHash, country].join('.');
+  const value = [ticket.amount===0?'fz1':'fd1', ticket.nonce, ticket.amount, ticket.currency, ticket.expires, ticket.termsHash, country].join('.');
   return `${value}.${hmac(value, secret).slice(0, 32)}`;
 }
 export function readReference(value, secret) {
@@ -44,8 +44,8 @@ export function readReference(value, secret) {
   }
   if (parts.length !== 7 || !equal(signature, hmac(parts.join('.'), secret).slice(0, 32))) throw new CheckoutError(400, 'This checkout reference is invalid. Return to the shop.', 'invalid_reference');
   const [prefix, id, amount, currency, expires, termsHash, country] = parts;
-  if (prefix !== 'fd1' || !/^[a-f0-9]{24}$/.test(id) || !/^[1-9]\d{0,7}$/.test(amount) || !/^[A-Z]{3}$/.test(currency) || !/^\d{10}$/.test(expires) || !/^[a-f0-9]{12}$/.test(termsHash) || !/^[A-Z]{2}$/.test(country)) throw new CheckoutError(400, 'Invalid checkout reference.', 'invalid_reference');
-  return { id, amount: Number(amount), currency, expires: Number(expires), termsHash, country };
+  if (!['fd1','fz1'].includes(prefix) || !/^[a-f0-9]{24}$/.test(id) || !(prefix==='fz1'?amount==='0':/^[1-9]\d{0,7}$/.test(amount)) || !/^[A-Z]{3}$/.test(currency) || !/^\d{10}$/.test(expires) || !/^[a-f0-9]{12}$/.test(termsHash) || !/^[A-Z]{2}$/.test(country)) throw new CheckoutError(400, 'Invalid checkout reference.', 'invalid_reference');
+  return { free:prefix==='fz1', id, amount: Number(amount), currency, expires: Number(expires), termsHash, country };
 }
 
 export function stripeSignature(raw, header, secret, now = Date.now()) {

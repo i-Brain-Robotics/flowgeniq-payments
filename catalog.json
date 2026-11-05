@@ -325,6 +325,28 @@
       "kind": "digital",
       "credits": 32500,
       "planId": "7700672a-ed41-4867-9e10-5fd9d5fe793a"
+    },
+    {
+      "id": "checkout-test-free",
+      "name": "FlowGenIQ \u2014 Free checkout verification",
+      "once": 0,
+      "monthly": 0,
+      "kind": "digital",
+      "testOnly": true,
+      "allowedProviders": [
+        "stripe"
+      ]
+    },
+    {
+      "id": "checkout-test-paypal",
+      "name": "FlowGenIQ \u2014 PayPal checkout verification",
+      "once": 10,
+      "monthly": 0,
+      "kind": "digital",
+      "testOnly": true,
+      "allowedProviders": [
+        "paypal"
+      ]
     }
   ]
 }
