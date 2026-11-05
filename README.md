@@ -37,6 +37,6 @@ New verification products use the existing provider checkout, signed-reference, 
 - Stripe's minimum non-zero USD card charge is $0.50. No paid Stripe verification is authorized or performed by this change.
 - Unit/HTTP tests cover exact prices, supported providers, consent, signed references, free completion, PayPal capture and webhook reconciliation. They do not prove live authentication, buyer approval, delivery, or a completed live transaction.
 
-The Blueprint no longer manages payment mode, normal shop enablement, catalog/onboarding approval, or enabled-provider lists. Existing Dashboard values are preserved rather than reset during a Blueprint sync. Live keys still require matching `PAYMENT_MODE=live` and `PAYPAL_MODE=live` settings, plus correctly registered webhook destinations. Credentials are never copied into this repository.
+The Blueprint sets `PAYMENT_MODE=live` and `PAYPAL_MODE=live` for the requested live verification. It preserves Dashboard-managed normal shop enablement, catalog/onboarding approval and enabled-provider lists. `PAYMENT_VERIFICATION_REVISION` rolls out this verification update without enabling normal sales. Credentials and provider webhook registration are still required; no credentials are copied into this repository.
 
 The separate payment-services Render account is needed for manual deployment. Frontend verification cards appear only after the matching backend reports live-mode verification readiness. Current original storefront checkout flows and legacy subscriptions remain in place.

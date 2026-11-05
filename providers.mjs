@@ -27,9 +27,10 @@ export function createProviders(c,brand,fetcher=fetch){
    if(o.provider==='paypal'&&o.amount<=0)throw new CheckoutError(400,'PayPal requires a positive amount.');
    if(['stripe','affirm'].includes(o.provider)){
     const b=new URLSearchParams({mode:o.monthly?'subscription':'payment','payment_method_types[0]':o.provider==='affirm'?'affirm':'card','adaptive_pricing[enabled]':'false',client_reference_id:o.id,'metadata[payment_reference]':o.reference,'metadata[brand]':brand.id,'metadata[sku]':o.sku,'metadata[terms_hash]':o.termsHash,billing_address_collection:'required',success_url:c.baseUrl+'/payments/stripe/return?state='+encodeURIComponent(o.reference)+'&session_id={CHECKOUT_SESSION_ID}',cancel_url:c.baseUrl+'/payments/cancel',expires_at:String(o.expires)});
+    if(o.testOnly)b.set('billing_address_collection','auto');
     if(o.kind==='physical')b.set('shipping_address_collection[allowed_countries][0]',o.country);
     if(o.monthly)b.set('subscription_data[metadata][payment_reference]',o.reference);
-    else b.set('payment_intent_data[metadata][payment_reference]',o.reference);
+    else if(o.amount>0)b.set('payment_intent_data[metadata][payment_reference]',o.reference);
     const lines=[...(o.once||o.testOnly&&o.amount===0?[[o.once,o.name+' — one-time total',false]]:[]),...(o.monthly?[[o.monthly,o.name+' — monthly',true]]:[])];
     lines.forEach(([amount,name,recurring],i)=>{for(const[k,v]of Object.entries({currency:o.currency.toLowerCase(),unit_amount:String(amount),'product_data][name':name}))b.set(`line_items[${i}][price_data][${k}]`,v);b.set(`line_items[${i}][quantity]`,'1');if(recurring)b.set(`line_items[${i}][price_data][recurring][interval]`,'month');});
     const s=await stripe('checkout/sessions','POST',b,idempotency(o));validateStripe(s,o,c.mode);return {id:stripeId(s.id),url:providerUrl(s.url,'stripe',c.mode)};
