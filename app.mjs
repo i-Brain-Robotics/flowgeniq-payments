@@ -25,7 +25,7 @@ export function createApp(env,catalog,options={}){
   isHtml=req.method==='GET'&&!['/api/shop','/healthz','/readyz'].includes(path)||path==='/payments/create';
   if(req.method==='GET'&&path==='/healthz'){send(res,200,{status:'ok',service:catalog.id+'-payments',paymentMode:cfg.mode});return;}
   if(req.method==='GET'&&path==='/readyz'){await store.ready();send(res,200,{status:'ok'});return;}
-  if(req.method==='GET'&&path==='/api/shop'){send(res,200,{product:catalog.id,currency:catalog.currency,paymentMode:cfg.mode,ready:cfg.ready,providers:cfg.ready?cfg.providers:[],verification:{ready:cfg.verificationReady,providers:cfg.verificationReady?cfg.providers.filter(p=>['stripe','paypal'].includes(p)):[]},items:catalog.items.filter(p=>!p.testOnly||cfg.verificationReady),delivery:catalog.delivery,policies:catalog.policies});return;}
+  if(req.method==='GET'&&path==='/api/shop'){send(res,200,{product:catalog.id,currency:catalog.currency,paymentMode:cfg.mode,ready:cfg.ready,providers:cfg.ready?cfg.providers:[],verification:{ready:cfg.verificationReady,checks:cfg.verificationChecks,providers:cfg.verificationReady?cfg.providers.filter(p=>['stripe','paypal'].includes(p)):[]},items:catalog.items.filter(p=>!p.testOnly||cfg.verificationReady),delivery:catalog.delivery,policies:catalog.policies});return;}
   if(req.method==='GET'&&path==='/payments/checkout.css'){send(res,200,css.toString(),false,{'Content-Type':'text/css; charset=utf-8'});return;}
   if(req.method==='GET'&&path==='/robots.txt'){send(res,200,'User-agent: *\nDisallow: /\n',false,{'Content-Type':'text/plain'});return;}
   if(req.method==='GET'&&['/','/shop'].includes(path)){send(res,200,landing(catalog,cfg),true);return;}
