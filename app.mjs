@@ -20,7 +20,7 @@ export function createApp(env,catalog,options={}){
  const available=sku=>{if(!(catalog.items.find(p=>p.id===sku)?.testOnly?cfg.verificationReady:cfg.ready))throw new CheckoutError(503,'Checkout is being configured. Please contact us through the shop.');};
  const getOrder=async reference=>{const q=readReference(reference,cfg.signingSecret),o=await store.get(q.id);if(!o||o.reference!==reference||o.amount!==q.amount||o.currency!==q.currency||o.termsHash!==q.termsHash||q.free&&(!o.testOnly||o.sku!=='checkout-test-free'))throw new CheckoutError(404,'Payment reference not found.');return o;};
  async function status(order,capture=false){return store.lock(order.id,async o=>{if(!o.checkout)throw new CheckoutError(409,'Checkout has not started.');const r=await providers.status(o,capture);o.status=r.status;o.subscription=r.subscription||null;return {...r,reference:o.checkout.id};});}
- async function handle(req,res){let isHtml=false;try{
+ async function handle(req,res){let isHtml=false,verificationRequest=false;try{
   const url=new URL(req.url,cfg.baseUrl),path=url.pathname;
   isHtml=req.method==='GET'&&!['/api/shop','/healthz','/readyz'].includes(path)||path==='/payments/create';
   if(req.method==='GET'&&path==='/healthz'){send(res,200,{status:'ok',service:catalog.id+'-payments',paymentMode:cfg.mode});return;}
@@ -46,7 +46,7 @@ export function createApp(env,catalog,options={}){
    sameOrigin(req);rate(req);if(!req.headers['content-type']?.startsWith('application/x-www-form-urlencoded'))throw new CheckoutError(415,'Use the checkout form.');const form=new URLSearchParams((await body(req)).toString());if([...form.keys()].some(k=>!['csrf','accept','provider','name','line1','line2','city','postal'].includes(k))||[...form.keys()].some(k=>form.getAll(k).length!==1))throw new CheckoutError(400,'Invalid checkout request.');
    const value=req.headers.cookie?.split(';').map(x=>x.trim()).find(x=>x.startsWith(cookieName+'='))?.slice(cookieName.length+1),ticket=readCookie(value,cfg.signingSecret);
    if(!ticket||!equal(ticket.nonce,form.get('csrf')))throw new CheckoutError(403,'Checkout expired. Return to the shop.');
-   const q=quote(catalog,ticket.input);available(q.sku);if(q.catalogHash!==ticket.catalogHash||ticket.termsHash!==digest(purchasePolicies(catalog,q))||ticket.expires<Date.now()/1000+1800)throw new CheckoutError(409,'Review the current price and terms.');
+   const q=quote(catalog,ticket.input);verificationRequest=q.testOnly===true;available(q.sku);if(q.catalogHash!==ticket.catalogHash||ticket.termsHash!==digest(purchasePolicies(catalog,q))||ticket.expires<Date.now()/1000+1800)throw new CheckoutError(409,'Review the current price and terms.');
    const provider=form.get('provider');if(!cfg.providers.includes(provider)||q.testOnly&&!q.allowedProviders.includes(provider)||form.get('accept')!=='yes')throw new CheckoutError(400,'Select a payment method and accept the purchase terms.');
    if(provider==='affirm'&&(q.kind!=='physical'||q.monthly||q.country!=='US'||q.once<3500||q.once>3000000))throw new CheckoutError(400,'Affirm is not available for this configuration.');
    const address=Object.fromEntries(['name','line1','line2','city','postal'].map(k=>[k,(form.get(k)||'').trim()]));if(!address.name||Object.values(address).some(v=>v.length>140)||q.kind==='physical'&&['line1','city','postal'].some(k=>!address[k]))throw new CheckoutError(400,'Complete the delivery details.');
@@ -71,6 +71,6 @@ export function createApp(env,catalog,options={}){
    }send(res,200,{received:true});return;
   }
   send(res,404,{error:'Not found'});
- }catch(e){const status=e instanceof CheckoutError?e.status:503,message=e instanceof CheckoutError?e.message:'Payment service temporarily unavailable.';if(status>=500)console.error(JSON.stringify({event:'payment_error',status,code:e.code||'service_unavailable'}));send(res,status,isHtml?page(catalog,cfg,'Payment service',`<section class="card"><h1>${status>=500?'Checkout unavailable':'Please review your order'}</h1><p>${message}</p></section>`):{error:message},isHtml);}}
+ }catch(e){const status=e instanceof CheckoutError?e.status:503,message=(e instanceof CheckoutError?e.message:'Payment service temporarily unavailable.')+(verificationRequest&&Number.isInteger(e.providerStatus)?' Provider response: HTTP '+e.providerStatus+(e.providerCode?' ('+e.providerCode+')':'')+'.':'');if(status>=500)console.error(JSON.stringify({event:'payment_error',status,code:e.code||'service_unavailable'}));send(res,status,isHtml?page(catalog,cfg,'Payment service',`<section class="card"><h1>${status>=500?'Checkout unavailable':'Please review your order'}</h1><p>${message}</p></section>`):{error:message},isHtml);}}
  return {handle,close:()=>store.close()};
 }
