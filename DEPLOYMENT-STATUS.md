@@ -1,45 +1,48 @@
-# flowgeniq payment service deployment status
+# FlowGenIQ payment verification — November 5, 2026
 
-Deployed and verified November 4, 2026 (US Eastern).
+## Current deployment
 
-## Deployment
+- Payment origin: https://flowgeniq-payments.onrender.com
+- Render service: `srv-dbm06te1egvs73ath7l0` in the separate payment-services workspace.
+- Storefront verification entry: https://flowgeniq-payments.onrender.com/shop
+- Latest checkout-code revision before this status update: `b70030a5346742d6adece466404bc22c6e81d598`.
+- Live HTTP checks: `/healthz`, `/readyz` and `/api/shop` respond successfully; payment mode is `live`.
+- Regular private-service catalog readiness is `false`. Verification readiness is evaluated separately for the two fixed test products. Existing embedded storefront payment flows and legacy subscriptions have not been migrated by this change.
+- The Blueprint restores manual web deployment (`autoDeployTrigger: "off"`) after the fix rollout. Runtime configuration in the private workspace requires an authenticated owner to inspect; source configuration is not evidence of a Dashboard setting.
 
-- Public service: https://flowgeniq-payments.onrender.com
-- Render dashboard: https://dashboard.render.com/web/srv-dbm06te1egvs73ath7l0
-- Service ID: srv-dbm06te1egvs73ath7l0
-- Blueprint ID: exs-dblvus5bedkc73apgrng
-- Successful deploy: dep-dbm06tm1egvs73ath8d0
-- Deployed runtime commit: 1b1683f78201cd87874a5d00f5887ee106aedf1c
-- Render reports the deployment LIVE.
-- Dedicated PostgreSQL database: flowgeniq-payments-db; Basic 256 MB, 1 GB storage, Oregon, public database access disabled.
-- Web compute: Starter, Oregon. Automatic web deployments remain off.
-- Hosting cost approved by the owner: approximately $13/month per service/database pair, $39/month total for all three, plus applicable usage/taxes.
+## Actual provider results
 
-## Verified against the deployed service
+| Service | Stripe $0 free order | PayPal $0.10 order |
+| --- | --- | --- |
+| FaceDecode | Completed in live checkout; return says “Free checkout completed.” | Live order created; guest checkout displays $0.10; buyer completion pending. |
+| BodyDecode | Blocked: Stripe key matches live mode, but webhook secret check fails. | Live order created; guest checkout displays $0.10; buyer completion pending. |
+| AugmentEYE | Completed in live checkout; return says “Free checkout completed.” | Live order created; guest checkout displays $0.10; buyer completion pending. |
+| FlowGenIQ | Blocked: live Stripe key/webhook checks fail. | Blocked: PayPal credential/webhook checks fail. |
+| FlowMedIQ | Blocked: live Stripe key/webhook checks fail. | Blocked: PayPal credential/webhook checks fail. |
 
-- GET /healthz returned HTTP 200, status ok, PAYMENT_MODE=test.
-- GET /readyz returned HTTP 200, confirming PostgreSQL connection and initialization.
-- GET /api/shop returned HTTP 200, the correct brand catalog, paymentMode=test, ready=false, providers=[].
-- GET /checkout returned HTTP 503 as expected while new purchases are paused.
-- Startup database connection refusals resolved during provisioning before the successful deployment; subsequent database health probes passed.
-- The original 30 automated backend tests passed per repository (90 total across all three). Provider calls and persistence in automated tests are mocked; no real provider sandbox purchase has been completed for these services.
-- Existing storefronts and customer subscriptions have not been migrated.
+No PayPal order was captured and no paid card charge or subscription was created. The two successful Stripe orders are no-cost order checks; they do not verify paid card authorization or capture. Live webhook delivery has not been independently audited: the merchant Stripe Dashboard requires sign-in. Successful return-page verification does not establish webhook delivery.
 
-## Runtime state and remaining setup
+PayPal guest checkout is available on FaceDecode, BodyDecode and AugmentEYE. The optional create-account selection was unchecked. Buyer name, phone and payment details must be completed by the owner; no customer or payment data is stored in this report.
 
-PAYMENT_MODE=test, SHOP_ENABLED=false, CATALOG_APPROVED=false. Each service uses its own generated checkout signing secret and its own database. No Stripe or PayPal credentials or endpoint webhook secrets were copied from another service.
+## Products and scope
 
-Before accepting payments: configure the intended brand-specific provider credentials and new webhook endpoints; complete real sandbox success, decline, cancellation, retry and duplicate-webhook checks; review purchase policies and current catalog; configure a unique admin login if needed; then integrate the storefront and reconcile legacy transactions.
+- `checkout-test-free`: $0.00 USD, Stripe only, one-time free verification order.
+- `checkout-test-paypal`: $0.10 USD, PayPal only, one-time verification order.
+- Neither product provides equipment, software access, credits, fulfillment or a recurring subscription. Verification uses its own purchase terms, fixed prices and signed references.
+- The original FaceDecode, BodyDecode, AugmentEYE and FlowMedIQ storefronts have deployed verification cards. Cards are shown only when the matching backend reports live verification readiness for that provider. FlowGenIQ verification uses its standalone payment storefront; Suite and SuiteAdmin were not modified.
+- `PAYMENT_VERIFICATION_ENABLED=false` removes temporary items after completion. Normal provider/catalog/onboarding gates are preserved.
 
-FlowGenIQ additionally requires authenticated customer/account binding and tested subscription/credit entitlement integration with Suite Admin. Its live-readiness gate stays off until that is connected.
+## Remaining work
 
-Webhook URLs:
-- https://flowgeniq-payments.onrender.com/payments/webhooks/stripe
-- https://flowgeniq-payments.onrender.com/payments/webhooks/paypal
+1. In **bodydecode-payments**, configure the live Stripe endpoint signing secret (`STRIPE_WEBHOOK_SECRET`) for `https://bodydecode-payments.onrender.com/payments/webhooks/stripe`. The current redacted readiness check fails; the live key check passes.
+2. In **flowgeniq-payments** and **flowmediq-payments**, configure valid live `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and `PAYPAL_WEBHOOK_ID`. Current checks fail for both provider pairs; they do not reveal secret values or prove which individual value is absent. Modes are already live.
+3. Register each provider destination against its matching payment origin, including `/payments/webhooks/stripe` and `/payments/webhooks/paypal`, and set that destination's matching secret/ID. Values on the original website app do not configure the separate payment app.
+4. Complete the three open $0.10 PayPal guest checkouts with owner-provided buyer/payment details, then verify capture, signed return and provider webhook delivery. Sign in to the payment-services Render account and merchant dashboards for the remaining configuration/audit.
+5. Complete Stripe free checkout on the remaining services once ready. A paid USD Stripe card test requires at least $0.50, above the currently authorized $0.10 test amount; none was attempted. Reference: https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts
+6. Confirm regular purchase policies, normal product/provider enablement, entitlement/onboarding integration where applicable, subscription behavior and legacy transaction reconciliation before claiming the full storefront/payment flow is ready. Existing gates must not be bypassed for testing.
 
-See README.md for the full activation and migration workflow. The service being LIVE on Render means its infrastructure is running; it does not mean live payment processing is enabled.
+## Code validation and fixes
 
+All five backends pass **228 automated tests**: FaceDecode 55, BodyDecode 42, AugmentEYE 42, FlowGenIQ 42 and FlowMedIQ 47; this repository contributes 42. These tests use deterministic provider fixtures and do not replace real payments or webhooks. All five Blueprints validate; the four original storefront builds are Live after strict TypeScript checks.
 
-## Verification-product change prepared — November 5, 2026
-
-$0 Stripe free-order and $0.10 PayPal products are prepared. Local verification across all five payment repositories passes 212 automated tests (FaceDecode 55; BodyDecode 38; AugmentEYE 38; FlowGenIQ 38; FlowMedIQ 43). These are mocked provider/HTTP tests. This revision still needs deployment, live provider validation, signed webhook delivery and buyer completion. No live verification order or charge has been completed.
+Live testing exposed and fixed JSONB object-key reordering during retry comparison; null subscription access on one-time Stripe confirmation; incorrect free-order classification; and blank physical shipping fields on digital PayPal orders. Regression tests model these cases. Verification consent is bound to its own terms, unavailable providers are hidden per product, and provider error diagnostics expose only sanitized HTTP status/enum codes. No provider credentials were copied into Git.

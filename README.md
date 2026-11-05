@@ -1,5 +1,7 @@
 # FlowGenIQ payments
 
+Current verification status (November 5, 2026): temporary $0 Stripe and $0.10 PayPal items are implemented. Live testing is partial; see [DEPLOYMENT-STATUS.md](DEPLOYMENT-STATUS.md) for completed checkouts, provider configuration blockers and required buyer handoffs. Older deployment descriptions below describe the initial rollout.
+
 Private, independently deployed payment backend, following the FaceDecode isolation model. Node 24, dedicated PostgreSQL database, independent signing secret and provider webhook configuration. New purchases start paused in test mode. Source catalog captured from the existing storefront/admin public API on November 4, 2026 (US Eastern).
 
 ## Billing
@@ -41,4 +43,4 @@ The Blueprint sets `PAYMENT_MODE=live` and `PAYPAL_MODE=live` for the requested 
 
 The separate payment-services Render account is needed for manual deployment. Frontend verification cards appear only after the matching backend reports live-mode verification readiness. Current original storefront checkout flows and legacy subscriptions remain in place.
 
-The verification rollout temporarily enables commit-triggered deployment so the latest checkout fixes can be verified. Restore `autoDeployTrigger: "off"` after the deployment and verification pass. Live testing found and fixed database address-key ordering during retry comparisons; tests now model JSONB key reordering. Zero-total Stripe orders are classified as free whether Stripe reports `paid` or `no_payment_required`.
+The Blueprint is restored to `autoDeployTrigger: "off"` after the checkout-fix rollout. Live testing fixed JSONB address ordering on retries, one-time Stripe confirmation when subscription is null, and digital PayPal requests containing empty shipping fields. Verification items use their own purchase terms and provider-specific readiness. Zero-total Stripe orders are classified as free whether Stripe reports `paid` or `no_payment_required`. See `DEPLOYMENT-STATUS.md` for the actual live results and remaining configuration.

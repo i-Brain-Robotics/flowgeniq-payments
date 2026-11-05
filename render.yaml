@@ -7,7 +7,7 @@ services:
     buildCommand: npm ci --omit=dev && npm test
     startCommand: npm start
     healthCheckPath: /readyz
-    autoDeployTrigger: commit
+    autoDeployTrigger: "off"
     envVars:
       - key: NODE_VERSION
         value: "24"
