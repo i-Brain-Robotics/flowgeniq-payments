@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import catalog from '../catalog.json' with {type:'json'};
+import {createApp} from '../app.mjs';
+const env={NODE_ENV:'test',PUBLIC_BASE_URL:'http://localhost',PAYMENT_MODE:'test',SHOP_ENABLED:'true',DATABASE_URL:'postgresql://fixture',CHECKOUT_SIGNING_SECRET:'fixture-signing-secret-at-least-32-bytes',STRIPE_SECRET_KEY:'sk_test_fixture123456',STRIPE_WEBHOOK_SECRET:'whsec_fixture123456',PAYPAL_CLIENT_ID:'fixtureClient12345',PAYPAL_CLIENT_SECRET:'fixtureSecret12345',PAYPAL_WEBHOOK_ID:'fixtureWebhook12345',PAYPAL_MODE:'sandbox'};
+async function server(t){const app=createApp(env,catalog,{store:{configured:true,ready:async()=>{},close:async()=>{}},providers:{}}),s=createServer(app.handle);await new Promise(r=>s.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>s.close(r)));return 'http://127.0.0.1:'+s.address().port;}
+test('hosted review preserves the storefront provider selection',async t=>{const base=await server(t),sku=catalog.items.find(p=>!p.testOnly).id;const r=await fetch(base+'/checkout?sku='+sku+'&country=US&region=FL&provider=paypal');assert.equal(r.status,200);assert.match(await r.text(),/value="paypal" selected/);const invalid=await fetch(base+'/checkout?sku='+sku+'&region=FL&provider=attacker');assert.equal(invalid.status,400);});
+test('catalog readiness identifies pause and approval gates without revealing credentials',async t=>{const base=await server(t),r=await fetch(base+'/api/shop'),d=await r.json();assert.equal(d.readiness.shopEnabled,true);assert.equal(d.readiness.catalogApproved,false);assert.equal(typeof d.readiness.policiesReady,'boolean');assert.equal(typeof d.readiness.fulfillmentReady,'boolean');assert.ok(!JSON.stringify(d).includes(env.CHECKOUT_SIGNING_SECRET));assert.ok(!JSON.stringify(d).includes(env.PAYPAL_CLIENT_SECRET));});
